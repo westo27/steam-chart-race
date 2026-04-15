@@ -108,10 +108,21 @@ https://steamcharts.com/app/{appid}
 
 The page has a table with columns: Month, Avg. Players, Gain, % Gain, Peak Players. Parse with cheerio in the main process.
 
+**Steamcharts is a one-person operation with no API.** Be a polite consumer of their data:
+
+- **User-Agent**: `SteamChartRace/1.0 (+contact info)` — identifies the tool so the operator can email rather than IP-block if there's ever a problem
+- **Minimum delay between requests**: 2000ms, even when fetching multiple games in one user action (fetch serially, not in parallel)
+- **Cache TTL**: 30 days per game (steamcharts updates monthly, no point refreshing more often)
+- **Cache key**: appid + YYYY-MM (refresh once per calendar month, not every 30 days exactly)
+- **429 handling**: exponential backoff starting at 30s, max 3 retries, then surface error to user
+- **Cache location**: flat JSON files in `app.getPath('userData')/cache/steamcharts/{appid}.json`
+
 **Defensive parsing:**
 - Wrap parser in try/catch and log raw HTML on failure
-- Cache parsed results to disk (keyed by appid + ISO week) so dev iteration doesn't re-hit steamcharts
-- Steamcharts data only updates monthly — weekly cache is fine
+- Never throw uncaught from a parse — return a structured error
+- If the table is missing or empty, treat as "no data available for this game" rather than a hard error
+
+**If commercialising later:** contact James Gray at privacy@steamcharts.com for explicit permission before shipping a paid version. The current "polite scraping" approach is fine for personal use but has no legal cover for a commercial product.
 
 ---
 
@@ -450,6 +461,7 @@ async function exportFrames() {
 
 - **better-sqlite3 needs rebuilding against Electron's Node version.** Add `"postinstall": "electron-builder install-app-deps"` to package.json from day one.
 - **Steam app list is ~80MB JSON** — fetch and ingest into SQLite once, refresh weekly in background.
+- **Steamcharts is a one-person operation, no API.** Cache aggressively (30 days per game), rate limit to 1 req / 2s, identify the tool in User-Agent, respect 429 with exponential backoff. See data sources section for full politeness rules.
 - **Steamcharts HTML structure can change without notice** — defensive parsing with logging.
 - **Some games have missing months in steamcharts data** — handle gaps by either linear interpolation or breaking the line.
 - **Dead games can have 0 average players** — clamp to 1 for log scale, or skip those data points.

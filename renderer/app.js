@@ -1,11 +1,12 @@
-// app.js — UI logic, step 1 scaffold
-// Search, game list, and controls wiring. Chart/animation added in later steps.
+'use strict';
 
 const PALETTE = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6'];
 const MAX_GAMES = 5;
 
 const state = {
-  games: [], // { appid, name, color, data: null }
+  games: [],       // { appid, name, color } — sidebar game list
+  chartGames: [],  // { name, color, points } — ready for drawFrame
+  opts: { snapToNice: true, logScale: false },
 };
 
 // --- DOM refs ---
@@ -19,13 +20,10 @@ const btnExport = document.getElementById('btn-export');
 const statusBar = document.getElementById('status-bar');
 const canvas = document.getElementById('chart-canvas');
 
-// Set canvas to export resolution; CSS scales it to fit
 canvas.width = 1080;
 canvas.height = 1920;
 
 const ctx = canvas.getContext('2d');
-
-// Draw placeholder frame
 drawPlaceholder();
 
 // --- Duration slider ---
@@ -42,10 +40,7 @@ let searchTimer = null;
 searchInput.addEventListener('input', () => {
   clearTimeout(searchTimer);
   const query = searchInput.value.trim();
-  if (query.length < 2) {
-    hideAutocomplete();
-    return;
-  }
+  if (query.length < 2) { hideAutocomplete(); return; }
   searchTimer = setTimeout(() => runSearch(query), 200);
 });
 
@@ -60,9 +55,7 @@ searchInput.addEventListener('keydown', (e) => {
     autocompleteIndex = Math.max(autocompleteIndex - 1, -1);
     highlightItem(items);
   } else if (e.key === 'Enter') {
-    if (autocompleteIndex >= 0 && items[autocompleteIndex]) {
-      items[autocompleteIndex].click();
-    }
+    if (autocompleteIndex >= 0 && items[autocompleteIndex]) items[autocompleteIndex].click();
   } else if (e.key === 'Escape') {
     hideAutocomplete();
   }
@@ -80,11 +73,7 @@ async function runSearch(query) {
 function showAutocomplete(results) {
   autocompleteList.innerHTML = '';
   autocompleteIndex = -1;
-
-  if (!results.length) {
-    hideAutocomplete();
-    return;
-  }
+  if (!results.length) { hideAutocomplete(); return; }
 
   results.forEach((game) => {
     const li = document.createElement('li');
@@ -92,7 +81,6 @@ function showAutocomplete(results) {
     li.addEventListener('click', () => selectGame(game));
     autocompleteList.appendChild(li);
   });
-
   autocompleteList.classList.remove('hidden');
 }
 
@@ -103,14 +91,12 @@ function hideAutocomplete() {
 }
 
 function highlightItem(items) {
-  items.forEach((li, i) => {
-    li.classList.toggle('active', i === autocompleteIndex);
-  });
+  items.forEach((li, i) => li.classList.toggle('active', i === autocompleteIndex));
 }
 
 // --- Game selection ---
 
-function selectGame(game) {
+async function selectGame(game) {
   hideAutocomplete();
   searchInput.value = '';
 
@@ -118,29 +104,27 @@ function selectGame(game) {
     setStatus('Already added.');
     return;
   }
-
   if (state.games.length >= MAX_GAMES) {
     setStatus('Maximum 5 games.');
     return;
   }
 
   const color = PALETTE[state.games.length];
-  state.games.push({ appid: game.appid, name: game.name, color, data: null });
+  state.games.push({ appid: game.appid, name: game.name, color });
   renderGameList();
-  updateButtons();
 
-  if (state.games.length >= MAX_GAMES) {
-    searchInput.disabled = true;
-  }
+  if (state.games.length >= MAX_GAMES) searchInput.disabled = true;
+
+  await fetchAndRedraw();
 }
 
 function removeGame(appid) {
+  stopPreview();
   state.games = state.games.filter(g => g.appid !== appid);
-  // Reassign colors in order
   state.games.forEach((g, i) => { g.color = PALETTE[i]; });
   renderGameList();
-  updateButtons();
   searchInput.disabled = false;
+  fetchAndRedraw();
 }
 
 function renderGameList() {
@@ -157,23 +141,70 @@ function renderGameList() {
   });
 }
 
-function updateButtons() {
-  const hasGames = state.games.length >= 2;
-  btnPreview.disabled = !hasGames;
-  btnExport.disabled = !hasGames;
+// --- Fetch data for all games in state.games, rebuild chartGames, redraw ---
+
+async function fetchAndRedraw() {
+  stopPreview();
+  updateButtons();
+
+  if (state.games.length === 0) {
+    state.chartGames = [];
+    drawPlaceholder();
+    return;
+  }
+
+  setStatus('Fetching data…');
+  state.chartGames = [];
+
+  for (let i = 0; i < state.games.length; i++) {
+    const { appid, name, color } = state.games[i];
+    setStatus(`Fetching ${name}… (${i + 1}/${state.games.length})`);
+
+    const result = await window.api.fetchPlayerData(appid);
+
+    if (result.error || !result.months.length) {
+      setStatus(`No data for ${name}: ` + (result.error || 'empty'));
+      continue;
+    }
+
+    const points = result.months
+      .map(m => ({ date: parseMonth(m.month), avg: m.avg, peak: m.peak }))
+      .filter(p => p.date !== null);
+
+    state.chartGames.push({ name, color, points });
+  }
+
+  if (!state.chartGames.length) {
+    drawPlaceholder();
+    setStatus('No data loaded.');
+    return;
+  }
+
+  resetAnimationState(state.chartGames);
+  drawFrame(1.0, state.chartGames, state.opts, canvas);
+  setStatus(state.chartGames.length === 1
+    ? `${state.chartGames[0].name} loaded — add another game to compare`
+    : `${state.chartGames.length} games loaded`
+  );
+  updateButtons();
 }
 
-// --- Placeholder canvas render ---
+function updateButtons() {
+  const ready = state.chartGames.length >= 2;
+  btnPreview.disabled = !ready;
+  btnExport.disabled = !ready;
+}
+
+// --- Placeholder ---
 
 function drawPlaceholder() {
   ctx.fillStyle = '#0d1117';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.font = '400 28px -apple-system, BlinkMacSystemFont, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('Add 2+ games to preview', canvas.width / 2, canvas.height / 2);
+  ctx.fillText('Search for games to compare', canvas.width / 2, canvas.height / 2);
 }
 
 // --- Status bar ---
@@ -182,15 +213,46 @@ function setStatus(msg) {
   statusBar.textContent = msg;
 }
 
-// --- Preview / Export (stubs for step 1) ---
+// --- Preview ---
 
 btnPreview.addEventListener('click', () => {
-  setStatus('Preview coming in step 4.');
+  if (state.chartGames.length < 2) return;
+  const durationMs = parseInt(durationSlider.value, 10) * 1000;
+  setStatus('Playing…');
+  startPreview(state.chartGames, state.opts, canvas, durationMs);
 });
 
-btnExport.addEventListener('click', () => {
-  setStatus('Export coming in step 7.');
+// --- Export ---
+
+btnExport.addEventListener('click', async () => {
+  if (state.chartGames.length < 2) return;
+
+  const { filePath, canceled } = await window.api.saveVideoDialog();
+  if (canceled || !filePath) return;
+
+  btnExport.disabled = true;
+  btnPreview.disabled = true;
+  stopPreview();
+
+  const durationSecs = parseInt(durationSlider.value, 10);
+  const totalFrames = durationSecs * 30;
+
+  try {
+    await exportVideo(
+      state.chartGames,
+      state.opts,
+      canvas,
+      durationSecs,
+      filePath,
+      (pct) => setStatus(`Exporting… ${Math.round(pct * 100)}% (${Math.round(pct * totalFrames)}/${totalFrames} frames)`),
+    );
+    setStatus('Export complete: ' + filePath);
+  } catch (e) {
+    setStatus('Export failed: ' + e.message);
+    console.error('[export] failed:', e);
+  } finally {
+    updateButtons();
+  }
 });
 
-// Log that the IPC bridge is present
 console.log('[app] window.api available:', typeof window.api !== 'undefined');

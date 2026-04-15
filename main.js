@@ -32,6 +32,10 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
+  // Refresh Steam app list in background — never blocks the UI
+  steamApps.refreshIfNeeded().catch(e => {
+    console.error('[main] steam app list refresh failed:', e.message);
+  });
 });
 
 app.on('window-all-closed', () => {
@@ -54,6 +58,16 @@ ipcMain.handle('write-frame', async (_event, index, buffer) => {
 
 ipcMain.handle('encode-video', async (_event, outPath, opts) => {
   return ffmpegExport.encodeVideo(outPath, opts);
+});
+
+ipcMain.handle('save-video-dialog', async () => {
+  const { filePath, canceled } = await dialog.showSaveDialog({
+    title: 'Export Video',
+    defaultPath: 'steam-chart-race.mp4',
+    filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+  return { filePath };
 });
 
 ipcMain.handle('save-project', async (_event, data) => {

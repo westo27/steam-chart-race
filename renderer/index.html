@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Steam Chart Race</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="sidebar">
+    <h1 class="app-title">Steam Chart Race</h1>
+
+    <section class="search-section">
+      <label class="section-label">Games</label>
+      <div class="search-wrap">
+        <input
+          id="game-search"
+          type="text"
+          placeholder="Search for a game…"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <ul id="autocomplete-list" class="autocomplete-list hidden"></ul>
+      </div>
+      <ul id="game-list" class="game-list"></ul>
+    </section>
+
+    <section class="controls-section">
+      <label class="section-label">Controls</label>
+
+      <div class="control-row">
+        <label for="duration-slider">Duration</label>
+        <input id="duration-slider" type="range" min="5" max="60" value="30">
+        <span id="duration-label">30s</span>
+      </div>
+
+      <div class="control-row">
+        <label>
+          <input id="snap-numbers" type="checkbox" checked>
+          Snap to nice numbers
+        </label>
+      </div>
+
+      <div class="control-row">
+        <label>
+          <input id="log-scale" type="checkbox">
+          Log scale
+        </label>
+      </div>
+
+      <div class="control-row">
+        <label>
+          <input id="peak-markers" type="checkbox" checked>
+          Peak markers
+        </label>
+      </div>
+    </section>
+
+    <section class="actions-section">
+      <button id="btn-preview" class="btn-primary" disabled>Preview</button>
+      <button id="btn-export" class="btn-secondary" disabled>Export MP4</button>
+    </section>
+
+    <div id="status-bar" class="status-bar"></div>
+  </div>
+
+  <div id="chart-area">
+    <canvas id="chart-canvas"></canvas>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

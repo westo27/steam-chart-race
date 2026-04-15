@@ -1,0 +1,32 @@
+{
+  "name": "steam-chart-race",
+  "version": "0.1.0",
+  "description": "Animated line chart videos comparing Steam game player counts",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "electron-rebuild"
+  },
+  "build": {
+    "appId": "com.steamchartrace.app",
+    "productName": "Steam Chart Race",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "main/**/*",
+      "assets/**/*"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^29.0.0",
+    "electron-builder": "^24.0.0",
+    "@electron/rebuild": "^4.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.0",
+    "cheerio": "^1.0.0",
+    "ffmpeg-static": "^5.2.0",
+    "fluent-ffmpeg": "^2.1.3"
+  }
+}

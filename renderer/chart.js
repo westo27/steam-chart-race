@@ -4,15 +4,32 @@
 // drawFrame(progress, games, opts, canvas) produces one complete frame.
 // Mutable eased state lives here and must be reset before each animation run.
 
+// Base layout — overridden per-frame based on canvas aspect ratio
 const MARGIN = {
-  top: 120,
-  right: 280,
+  top: 160,
+  right: 320,
   bottom: 160,
   left: 90,
 };
 
-const LABEL_H = 80;    // pill height in canvas px
+const LABEL_H = 80;    // pill height in canvas px (desktop)
 const LABEL_GAP = 12;  // gap between pills
+
+// Returns layout constants scaled for the current canvas size.
+// Mobile (portrait, H > W): bigger pills and wider right margin.
+function getLayout(W, H) {
+  const mobile = H > W;
+  return {
+    margin: {
+      top: mobile ? 200 : 160,
+      right: mobile ? 380 : 320,
+      bottom: mobile ? 180 : 160,
+      left: mobile ? 100 : 90,
+    },
+    labelH: mobile ? 110 : 80,
+    labelGap: mobile ? 14 : 12,
+  };
+}
 
 const MONTHS_PARSE = [
   'January','February','March','April','May','June',
@@ -22,12 +39,11 @@ const MONTHS_PARSE = [
 // --- Mutable eased state (reset before each run) ---
 let currentMax = 1000;
 
-function resetAnimationState(games) {
+function resetAnimationState(games, canvas) {
   currentMax = 1000;
-  // Initialise each game's label Y to its stacked position so there's no
-  // fly-in on the first frame
+  const layout = canvas ? getLayout(canvas.width, canvas.height) : { margin: MARGIN, labelH: LABEL_H, labelGap: LABEL_GAP };
   games.forEach((g, i) => {
-    g.labelY = MARGIN.top + i * (LABEL_H + LABEL_GAP);
+    g.labelY = layout.margin.top + i * (layout.labelH + layout.labelGap);
   });
 }
 
@@ -142,14 +158,88 @@ function drawFrame(progress, games, opts, canvas) {
   const W = canvas.width;
   const H = canvas.height;
 
-  const chartL = MARGIN.left;
-  const chartR = W - MARGIN.right;
-  const chartT = MARGIN.top;
-  const chartB = H - MARGIN.bottom;
+  const { margin: M, labelH: LH, labelGap: LG } = getLayout(W, H);
+
+  const chartL = M.left;
+  const chartR = W - M.right;
+  const chartT = M.top;
+  const chartB = H - M.bottom;
 
   // --- Background ---
   ctx.fillStyle = '#0d1117';
   ctx.fillRect(0, 0, W, H);
+
+  // --- Game title (name vs name vs name…) ---
+  if (opts.showTitle !== false && games.length > 0) {
+    const SEP = ' vs ';
+    const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const names = games.map(g => g.name);
+    const chartAreaLeft = M.left;
+    const chartAreaRight = W - M.right;
+    const maxW = chartAreaRight - chartAreaLeft - 40;
+    const chartMidX = chartAreaLeft + (chartAreaRight - chartAreaLeft) / 2;
+
+    function shrinkToFit(text, start, min) {
+      let sz = start;
+      ctx.font = `600 ${sz}px ${FONT}`;
+      while (ctx.measureText(text).width > maxW && sz > min) {
+        sz -= 2;
+        ctx.font = `600 ${sz}px ${FONT}`;
+      }
+      return sz;
+    }
+
+    // Try single line first; if it still overflows at min size, split into 2 lines
+    let fontSize = shrinkToFit(names.join(SEP), 48, 24);
+    ctx.font = `600 ${fontSize}px ${FONT}`;
+    const fitsOnOne = names.length === 1 || ctx.measureText(names.join(SEP)).width <= maxW;
+
+    let lineGroups;
+    if (fitsOnOne) {
+      lineGroups = [names];
+    } else {
+      // Split at midpoint — try all splits and pick the one that needs the smallest maxW
+      let bestSplit = Math.ceil(names.length / 2);
+      let bestWorstW = Infinity;
+      for (let s = 1; s < names.length; s++) {
+        const l1 = ctx.measureText(names.slice(0, s).join(SEP)).width;
+        const l2 = ctx.measureText(names.slice(s).join(SEP)).width;
+        const worst = Math.max(l1, l2);
+        if (worst < bestWorstW) { bestWorstW = worst; bestSplit = s; }
+      }
+      lineGroups = [names.slice(0, bestSplit), names.slice(bestSplit)];
+      // Recompute font size so the widest line fits
+      const widest = lineGroups.map(g => g.join(SEP)).sort((a, b) =>
+        ctx.measureText(b).width - ctx.measureText(a).width)[0];
+      fontSize = shrinkToFit(widest, 44, 20);
+    }
+
+    const lineH = fontSize * 1.4;
+    const totalH = lineGroups.length * lineH;
+    const startY = M.top / 2 - totalH / 2 + lineH / 2;
+
+    ctx.font = `600 ${fontSize}px ${FONT}`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+
+    lineGroups.forEach((lineNames, li) => {
+      const lineText = lineNames.join(SEP);
+      const lineW = ctx.measureText(lineText).width;
+      let x = chartMidX - lineW / 2;
+      const y = startY + li * lineH;
+
+      lineNames.forEach((name, i) => {
+        ctx.fillStyle = '#e6edf3';
+        ctx.fillText(name, x, y);
+        x += ctx.measureText(name).width;
+        if (i < lineNames.length - 1) {
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.fillText(SEP, x, y);
+          x += ctx.measureText(SEP).width;
+        }
+      });
+    });
+  }
 
   // --- Time domain ---
   const allDates = games.flatMap(g => g.points.map(p => p.date.getTime()));
@@ -310,7 +400,7 @@ function drawFrame(progress, games, opts, canvas) {
   ctx.restore();
 
   // --- Peak markers ---
-  if (opts.peakMarkers !== false) {
+  if (opts.peakMarkers !== false && opts.summaryProgress == null) {
     // Collect visible peak info for each game
     const peaks = [];
     games.forEach((game, gi) => {
@@ -408,13 +498,19 @@ function drawFrame(progress, games, opts, canvas) {
 
   // Ease each game's label toward its target rank position
   activeItems.forEach((item, rank) => {
-    const targetY = chartT + rank * (LABEL_H + LABEL_GAP);
+    const targetY = chartT + rank * (LH + LG);
     if (item.game.labelY === undefined) item.game.labelY = targetY;
     item.game.labelY += (targetY - item.game.labelY) * 0.18;
   });
 
   const labelX = chartR + 16;
   const pillW = W - labelX - 10;
+
+  // Scale font sizes with pill height
+  const pillScale = LH / 80;
+  const nameFontSize = Math.round(23 * pillScale);
+  const valFontSize  = Math.round(20 * pillScale);
+  const imgValFontSize = Math.round(22 * pillScale);
 
   // Fade out pills + connectors during summary transition
   const pillAlpha = opts.summaryProgress != null ? 1 - smoothstep(opts.summaryProgress) : 1;
@@ -424,7 +520,7 @@ function drawFrame(progress, games, opts, canvas) {
   // Draw connector lines first (they sit behind the pills)
   activeItems.forEach(item => {
     const tc = tipCoords[item.gi];
-    const midY = item.game.labelY + LABEL_H / 2;
+    const midY = item.game.labelY + LH / 2;
 
     ctx.strokeStyle = colorWithAlpha(item.game.color, 0.35);
     ctx.lineWidth = 1.5;
@@ -439,7 +535,7 @@ function drawFrame(progress, games, opts, canvas) {
   // Draw pills
   if (pillAlpha > 0) activeItems.forEach(item => {
     const y = item.game.labelY;
-    const midY = y + LABEL_H / 2;
+    const midY = y + LH / 2;
     const hasImage = !!item.game.image && opts.showImages !== false;
 
     // Pill background
@@ -447,52 +543,51 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(labelX, y, pillW, LABEL_H, 8);
+    ctx.roundRect(labelX, y, pillW, LH, 8);
     ctx.fill();
     ctx.stroke();
 
-    // Colored left border strip (plain fillRect — no array radii needed)
+    // Colored left border strip
     ctx.fillStyle = item.game.color;
-    ctx.fillRect(labelX, y, 4, LABEL_H);
-
-    let textX;
+    ctx.fillRect(labelX, y, 4, LH);
 
     if (hasImage) {
-      // Fit the full image (184×69 natural) within a fixed slot, maintaining aspect ratio.
-      // Constrain to pill height minus a little padding so it doesn't touch the edges.
-      const IMG_SLOT_W = 150;
-      const IMG_SLOT_H = LABEL_H - 10;
+      // Image mode: image on left, value right-aligned, no name text
+      const IMG_SLOT_W = pillW - 14 - Math.round(60 * pillScale);
+      const IMG_SLOT_H = LH - 10;
       const natW = item.game.image.naturalWidth  || 184;
       const natH = item.game.image.naturalHeight || 69;
       const scale = Math.min(IMG_SLOT_W / natW, IMG_SLOT_H / natH);
       const imgW = natW * scale;
       const imgH = natH * scale;
       const imgX = labelX + 8;
-      const imgY = y + (LABEL_H - imgH) / 2;  // centre vertically in pill
+      const imgY = y + (LH - imgH) / 2;
 
       ctx.drawImage(item.game.image, imgX, imgY, imgW, imgH);
 
-      textX = imgX + IMG_SLOT_W + 8;
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = `600 ${imgValFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(formatY(item.val), labelX + pillW - 10, midY);
     } else {
-      // Fallback: colour swatch
+      // No image: colour swatch + name + value
+      const swatchSize = Math.round(16 * pillScale);
       ctx.fillStyle = item.game.color;
-      ctx.fillRect(labelX + 14, midY - 8, 16, 16);
-      textX = labelX + 38;
+      ctx.fillRect(labelX + 14, midY - swatchSize / 2, swatchSize, swatchSize);
+      const textX = labelX + 14 + swatchSize + 8;
+      const maxTextW = labelX + pillW - textX - 10;
+
+      ctx.fillStyle = '#e6edf3';
+      ctx.font = `500 ${nameFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      fillTextEllipsis(ctx, item.game.name, textX, midY - Math.round(11 * pillScale), maxTextW);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = `400 ${valFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.fillText(formatY(item.val), textX, midY + Math.round(13 * pillScale));
     }
-
-    const maxTextW = labelX + pillW - textX - 10;
-
-    // Game name
-    ctx.fillStyle = '#e6edf3';
-    ctx.font = '500 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    fillTextEllipsis(ctx, item.game.name, textX, midY - 12, maxTextW);
-
-    // Current value
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '400 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(formatY(item.val), textX, midY + 14);
   });
   ctx.restore();
 
@@ -517,13 +612,13 @@ function drawFrame(progress, games, opts, canvas) {
         const allTimePeak = g.points.reduce((m, p) => Math.max(m, p.peak ?? 0), 0);
         return { game: g, finalVal, allTimePeak };
       })
-      .sort((a, b) => b.finalVal - a.finalVal);
+      .sort((a, b) => b.allTimePeak - a.allTimePeak);
 
     const ROW_H = 68;
     const PAD = 28;
-    const panelW = W - MARGIN.left - MARGIN.right;
+    const panelW = W - M.left - M.right;
     const panelH = PAD + ranked.length * ROW_H + PAD;
-    const panelX = MARGIN.left;
+    const panelX = M.left;
     const panelY = chartT + 20;
 
     // Panel background
@@ -536,7 +631,7 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.stroke();
 
     // Metric label (top right of panel)
-    const metricLabel = usePeak ? 'PEAK PLAYERS' : 'AVG PLAYERS';
+    const metricLabel = 'ALL-TIME PEAK';
     ctx.fillStyle = `rgba(255,255,255,${0.3 * alpha})`;
     ctx.font = `500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     ctx.textAlign = 'right';
@@ -558,18 +653,38 @@ function drawFrame(progress, games, opts, canvas) {
       ctx.fillStyle = colorWithAlpha(game.color, alpha);
       ctx.fillRect(panelX + 64, rowY + 10, 4, ROW_H - 20);
 
+      const hasImage = !!game.image && opts.showImages !== false;
+      let nameX = panelX + 78;
+
+      if (hasImage) {
+        // Fit capsule image into row height slot
+        const IMG_SLOT_W = 120;
+        const IMG_SLOT_H = ROW_H - 16;
+        const natW = game.image.naturalWidth  || 184;
+        const natH = game.image.naturalHeight || 69;
+        const scale = Math.min(IMG_SLOT_W / natW, IMG_SLOT_H / natH);
+        const imgW = natW * scale;
+        const imgH = natH * scale;
+        const imgX = panelX + 78;
+        const imgY = rowY + (ROW_H - imgH) / 2;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(game.image, imgX, imgY, imgW, imgH);
+        ctx.globalAlpha = 1;
+        nameX = imgX + IMG_SLOT_W + 10;
+      }
+
       // Game name
       ctx.fillStyle = `rgba(230,237,243,${alpha})`;
       ctx.font = `500 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      fillTextEllipsis(ctx, game.name, panelX + 78, midY, panelW * 0.55);
+      fillTextEllipsis(ctx, game.name, nameX, midY, panelX + panelW - 120 - nameX);
 
-      // Value
+      // Value (all-time peak)
       ctx.fillStyle = colorWithAlpha(game.color, alpha);
       ctx.font = `600 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textAlign = 'right';
-      ctx.fillText(formatY(finalVal), panelX + panelW - 20, midY);
+      ctx.fillText(formatY(allTimePeak), panelX + panelW - 20, midY);
     });
   }
 }

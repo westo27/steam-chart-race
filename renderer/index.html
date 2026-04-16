@@ -29,94 +29,111 @@
     <section class="controls-section">
       <label class="section-label">Controls</label>
 
-      <div class="control-row">
-        <span>Format</span>
-        <div class="segmented" id="view-mode-toggle">
-          <button class="seg-btn active" data-value="mobile">Mobile</button>
-          <button class="seg-btn" data-value="desktop">Desktop</button>
+      <details class="control-group" open>
+        <summary class="group-label">Video</summary>
+        <div class="group-body">
+          <div class="control-row">
+            <span>Format</span>
+            <div class="segmented" id="view-mode-toggle">
+              <button class="seg-btn active" data-value="mobile">Mobile</button>
+              <button class="seg-btn" data-value="desktop">Desktop</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="duration-slider">Duration</label>
+            <input id="duration-slider" type="range" min="5" max="60" value="30">
+            <span id="duration-label">30s</span>
+          </div>
         </div>
-      </div>
+      </details>
 
-      <div class="control-row">
-        <label for="duration-slider">Duration</label>
-        <input id="duration-slider" type="range" min="5" max="60" value="30">
-        <span id="duration-label">30s</span>
-      </div>
-
-      <div class="control-row">
-        <label for="window-slider">Window</label>
-        <input id="window-slider" type="range" min="2" max="10" value="4" step="1">
-        <span id="window-label">4yr</span>
-      </div>
-
-      <div class="control-row">
-        <label for="thickness-slider">Line</label>
-        <input id="thickness-slider" type="range" min="2" max="16" value="5" step="1">
-        <span id="thickness-label">5px</span>
-      </div>
-
-      <div class="control-row">
-        <span>Player count</span>
-        <div class="segmented" id="player-count-toggle">
-          <button class="seg-btn active" data-value="peak">Peak</button>
-          <button class="seg-btn" data-value="avg">Avg</button>
+      <details class="control-group" open>
+        <summary class="group-label">Chart</summary>
+        <div class="group-body">
+          <div class="control-row">
+            <label for="window-slider">Window</label>
+            <input id="window-slider" type="range" min="0" max="10" value="4" step="1">
+            <span id="window-label">4yr</span>
+          </div>
+          <div class="control-row">
+            <span>Player count</span>
+            <div class="segmented" id="player-count-toggle">
+              <button class="seg-btn active" data-value="peak">Peak</button>
+              <button class="seg-btn" data-value="avg">Avg</button>
+            </div>
+          </div>
+          <div class="control-row">
+            <label for="thickness-slider">Line</label>
+            <input id="thickness-slider" type="range" min="2" max="16" value="5" step="1">
+            <span id="thickness-label">5px</span>
+          </div>
+          <div class="control-row">
+            <label>
+              <input id="snap-numbers" type="checkbox" checked>
+              Snap to nice numbers
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <input id="log-scale" type="checkbox">
+              Log scale
+            </label>
+          </div>
         </div>
-      </div>
+      </details>
 
-      <div class="control-row">
-        <label>
-          <input id="snap-numbers" type="checkbox" checked>
-          Snap to nice numbers
-        </label>
-      </div>
+      <details class="control-group">
+        <summary class="group-label">Style</summary>
+        <div class="group-body">
+          <div class="control-row">
+            <label>
+              <input id="show-title" type="checkbox">
+              Game title
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <input id="peak-markers" type="checkbox" checked>
+              Peak markers
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <input id="show-images" type="checkbox" checked>
+              Game images
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <input id="full-color-picker" type="checkbox">
+              Full colour picker
+            </label>
+          </div>
+        </div>
+      </details>
 
-      <div class="control-row">
-        <label>
-          <input id="log-scale" type="checkbox">
-          Log scale
-        </label>
-      </div>
-
-      <div class="control-row">
-        <label>
-          <input id="peak-markers" type="checkbox" checked>
-          Peak markers
-        </label>
-      </div>
-
-      <div class="control-row">
-        <label>
-          <input id="show-images" type="checkbox" checked>
-          Game images
-        </label>
-      </div>
-
-      <div class="control-row">
-        <label>
-          <input id="full-color-picker" type="checkbox">
-          Full colour picker
-        </label>
-      </div>
-
-      <div class="control-row">
-        <label>
-          <input id="end-summary" type="checkbox" checked>
-          End summary
-        </label>
-      </div>
-
-      <div class="control-row">
-        <label>
-          <input id="summary-stats" type="checkbox" checked>
-          Summary stats
-        </label>
-      </div>
-
-      <div class="control-row">
-        <label for="summary-duration-slider">Summary</label>
-        <input id="summary-duration-slider" type="range" min="2" max="15" value="5" step="1">
-        <span id="summary-duration-label">5s</span>
-      </div>
+      <details class="control-group">
+        <summary class="group-label">Summary</summary>
+        <div class="group-body">
+          <div class="control-row">
+            <label>
+              <input id="end-summary" type="checkbox" checked>
+              End summary
+            </label>
+          </div>
+          <div class="control-row">
+            <label>
+              <input id="summary-stats" type="checkbox" checked>
+              Summary stats
+            </label>
+          </div>
+          <div class="control-row">
+            <label for="summary-duration-slider">Duration</label>
+            <input id="summary-duration-slider" type="range" min="2" max="15" value="5" step="1">
+            <span id="summary-duration-label">5s</span>
+          </div>
+        </div>
+      </details>
     </section>
 
     <section class="actions-section">

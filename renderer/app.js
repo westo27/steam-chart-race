@@ -18,7 +18,7 @@ const COLOR_CHOICES = [
 const state = {
   games: [],       // { appid, name, color } — sidebar game list
   chartGames: [],  // { name, color, points } — ready for drawFrame
-  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5, summaryStats: true },
+  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5, summaryStats: true, showTitle: false },
 };
 
 // --- DOM refs ---
@@ -128,11 +128,16 @@ durationSlider.addEventListener('input', () => {
   durationLabel.textContent = durationSlider.value + 's';
 });
 
+// index 0 = 6mo, index 1 = 1yr, index 2 = 2yr, … index 10 = 10yr
+const WINDOW_OPTIONS = [0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+function windowLabel_(idx) { return idx === 0 ? '6mo' : WINDOW_OPTIONS[idx] + 'yr'; }
+
 windowSlider.addEventListener('input', () => {
-  state.opts.windowYears = parseInt(windowSlider.value, 10);
-  windowLabel.textContent = windowSlider.value + 'yr';
+  const idx = parseInt(windowSlider.value, 10);
+  state.opts.windowYears = WINDOW_OPTIONS[idx];
+  windowLabel.textContent = windowLabel_(idx);
   if (state.chartGames.length) {
-    resetAnimationState(state.chartGames);
+    resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   }
 });
@@ -141,7 +146,7 @@ thicknessSlider.addEventListener('input', () => {
   state.opts.lineThickness = parseInt(thicknessSlider.value, 10);
   thicknessLabel.textContent = thicknessSlider.value + 'px';
   if (state.chartGames.length) {
-    resetAnimationState(state.chartGames);
+    resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   }
 });
@@ -149,7 +154,15 @@ thicknessSlider.addEventListener('input', () => {
 document.getElementById('show-images').addEventListener('change', (e) => {
   state.opts.showImages = e.target.checked;
   if (state.chartGames.length) {
-    resetAnimationState(state.chartGames);
+    resetAnimationState(state.chartGames, canvas);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
+});
+
+document.getElementById('show-title').addEventListener('change', (e) => {
+  state.opts.showTitle = e.target.checked;
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   }
 });
@@ -157,7 +170,7 @@ document.getElementById('show-images').addEventListener('change', (e) => {
 document.getElementById('peak-markers').addEventListener('change', (e) => {
   state.opts.peakMarkers = e.target.checked;
   if (state.chartGames.length) {
-    resetAnimationState(state.chartGames);
+    resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   }
 });
@@ -176,7 +189,7 @@ document.getElementById('view-mode-toggle').addEventListener('click', (e) => {
   canvas.width  = DIMENSIONS[mode].width;
   canvas.height = DIMENSIONS[mode].height;
   if (state.chartGames.length) {
-    resetAnimationState(state.chartGames);
+    resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   } else {
     drawPlaceholder();
@@ -190,7 +203,7 @@ document.getElementById('player-count-toggle').addEventListener('click', (e) => 
   btn.classList.add('active');
   state.opts.usePeak = btn.dataset.value === 'peak';
   if (state.chartGames.length) {
-    resetAnimationState(state.chartGames);
+    resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   }
 });
@@ -382,7 +395,7 @@ async function fetchAndRedraw() {
     g.image = await loadGameImage(g.appid);
   }));
 
-  resetAnimationState(state.chartGames);
+  resetAnimationState(state.chartGames, canvas);
   drawFrame(1.0, state.chartGames, state.opts, canvas);
   setStatus(state.chartGames.length === 1
     ? `${state.chartGames[0].name} loaded — add another game to compare`
@@ -420,7 +433,7 @@ async function loadGameImage(appid) {
 }
 
 function updateButtons() {
-  const ready = state.chartGames.length >= 2;
+  const ready = state.chartGames.length >= 1;
   btnPreview.disabled = !ready;
   btnExport.disabled = !ready;
 }
@@ -446,7 +459,7 @@ function setStatus(msg) {
 // --- Preview ---
 
 btnPreview.addEventListener('click', () => {
-  if (state.chartGames.length < 2) return;
+  if (state.chartGames.length < 1) return;
   const durationMs = parseInt(durationSlider.value, 10) * 1000;
   setStatus('Playing…');
   startPreview(state.chartGames, state.opts, canvas, durationMs);
@@ -455,7 +468,7 @@ btnPreview.addEventListener('click', () => {
 // --- Export ---
 
 btnExport.addEventListener('click', async () => {
-  if (state.chartGames.length < 2) return;
+  if (state.chartGames.length < 1) return;
 
   const { filePath, canceled } = await window.api.saveVideoDialog();
   if (canceled || !filePath) return;

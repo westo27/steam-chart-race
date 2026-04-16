@@ -10,7 +10,7 @@ async function exportVideo(games, opts, canvas, durationSecs, outPath, onProgres
   const summaryFrames = opts.endSummary ? TRANSITION_FRAMES + holdFrames : 0;
   const totalFrames = animFrames + summaryFrames;
 
-  resetAnimationState(games);
+  resetAnimationState(games, canvas);
 
   async function captureFrame(index) {
     const dataUrl = canvas.toDataURL('image/png');

@@ -8,7 +8,7 @@ let animationId = null;
 
 function startPreview(games, opts, canvas, durationMs) {
   stopPreview();
-  resetAnimationState(games);
+  resetAnimationState(games, canvas);
 
   const TRANSITION_MS = 1000;
   const HOLD_MS = (opts.summaryDuration || 5) * 1000;

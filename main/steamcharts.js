@@ -11,7 +11,7 @@ let lastRequestTime = 0;
 // --- Cache helpers ---
 
 function getCacheDir() {
-  return path.join(app.getPath('userData'), 'cache', 'steamcharts');
+  return path.join(app.getPath('userData'), 'steamcharts-cache');
 }
 
 function cacheMonthKey() {
@@ -21,13 +21,17 @@ function cacheMonthKey() {
 
 function readCache(appid) {
   const cachePath = path.join(getCacheDir(), `${appid}.json`);
-  if (!fs.existsSync(cachePath)) return null;
+  if (!fs.existsSync(cachePath)) {
+    return null;
+  }
   try {
     const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-    if (cached.cacheMonth === cacheMonthKey()) {
-      console.log(`[steamcharts] cache hit for appid ${appid}`);
+    const currentMonth = cacheMonthKey();
+    if (cached.cacheMonth === currentMonth) {
+      console.log(`[steamcharts] cache HIT for appid ${appid} (${cached.data?.months?.length ?? 0} months)`);
       return cached.data;
     }
+    console.log(`[steamcharts] cache STALE for appid ${appid}: file=${cached.cacheMonth}, now=${currentMonth}`);
     return null;
   } catch (e) {
     console.error('[steamcharts] cache read error:', e.message);

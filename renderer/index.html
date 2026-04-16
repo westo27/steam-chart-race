@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
   <title>Steam Chart Race</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -30,6 +30,14 @@
       <label class="section-label">Controls</label>
 
       <div class="control-row">
+        <span>Format</span>
+        <div class="segmented" id="view-mode-toggle">
+          <button class="seg-btn active" data-value="mobile">Mobile</button>
+          <button class="seg-btn" data-value="desktop">Desktop</button>
+        </div>
+      </div>
+
+      <div class="control-row">
         <label for="duration-slider">Duration</label>
         <input id="duration-slider" type="range" min="5" max="60" value="30">
         <span id="duration-label">30s</span>
@@ -39,6 +47,20 @@
         <label for="window-slider">Window</label>
         <input id="window-slider" type="range" min="2" max="10" value="4" step="1">
         <span id="window-label">4yr</span>
+      </div>
+
+      <div class="control-row">
+        <label for="thickness-slider">Line</label>
+        <input id="thickness-slider" type="range" min="2" max="16" value="5" step="1">
+        <span id="thickness-label">5px</span>
+      </div>
+
+      <div class="control-row">
+        <span>Player count</span>
+        <div class="segmented" id="player-count-toggle">
+          <button class="seg-btn active" data-value="peak">Peak</button>
+          <button class="seg-btn" data-value="avg">Avg</button>
+        </div>
       </div>
 
       <div class="control-row">
@@ -60,6 +82,33 @@
           <input id="peak-markers" type="checkbox" checked>
           Peak markers
         </label>
+      </div>
+
+      <div class="control-row">
+        <label>
+          <input id="show-images" type="checkbox" checked>
+          Game images
+        </label>
+      </div>
+
+      <div class="control-row">
+        <label>
+          <input id="full-color-picker" type="checkbox">
+          Full colour picker
+        </label>
+      </div>
+
+      <div class="control-row">
+        <label>
+          <input id="end-summary" type="checkbox" checked>
+          End summary
+        </label>
+      </div>
+
+      <div class="control-row">
+        <label for="summary-duration-slider">Summary</label>
+        <input id="summary-duration-slider" type="range" min="2" max="15" value="5" step="1">
+        <span id="summary-duration-label">5s</span>
       </div>
     </section>
 

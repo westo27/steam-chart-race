@@ -3,10 +3,22 @@
 const PALETTE = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6'];
 const MAX_GAMES = 5;
 
+const DIMENSIONS = {
+  mobile:  { width: 1080, height: 1920 },
+  desktop: { width: 1920, height: 1080 },
+};
+
+const COLOR_CHOICES = [
+  '#e74c3c', '#ff5722', '#e67e22', '#f39c12',
+  '#f1c40f', '#cddc39', '#2ecc71', '#1abc9c',
+  '#00bcd4', '#3498db', '#2980b9', '#9b59b6',
+  '#e91e63', '#f06292', '#8bc34a', '#607d8b',
+];
+
 const state = {
   games: [],       // { appid, name, color } — sidebar game list
   chartGames: [],  // { name, color, points } — ready for drawFrame
-  opts: { snapToNice: true, logScale: false, windowYears: 4 },
+  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5 },
 };
 
 // --- DOM refs ---
@@ -17,16 +29,98 @@ const durationSlider = document.getElementById('duration-slider');
 const durationLabel = document.getElementById('duration-label');
 const windowSlider = document.getElementById('window-slider');
 const windowLabel = document.getElementById('window-label');
+const thicknessSlider = document.getElementById('thickness-slider');
+const thicknessLabel = document.getElementById('thickness-label');
 const btnPreview = document.getElementById('btn-preview');
 const btnExport = document.getElementById('btn-export');
 const statusBar = document.getElementById('status-bar');
 const canvas = document.getElementById('chart-canvas');
 
-canvas.width = 1080;
-canvas.height = 1920;
+canvas.width = DIMENSIONS.mobile.width;
+canvas.height = DIMENSIONS.mobile.height;
 
 const ctx = canvas.getContext('2d');
 drawPlaceholder();
+
+// --- Color palette popup ---
+
+let paletteTargetGame = null;
+let paletteTargetBtn = null;
+
+const colorPaletteEl = (() => {
+  const el = document.createElement('div');
+  el.className = 'color-palette hidden';
+  const grid = document.createElement('div');
+  grid.className = 'palette-grid';
+  COLOR_CHOICES.forEach(hex => {
+    const btn = document.createElement('button');
+    btn.className = 'palette-swatch';
+    btn.style.background = hex;
+    btn.title = hex;
+    btn.addEventListener('click', () => applyPaletteColor(hex));
+    grid.appendChild(btn);
+  });
+  el.appendChild(grid);
+  document.body.appendChild(el);
+  return el;
+})();
+
+// Hidden native input used when fullColorPicker is on
+const nativeColorInput = (() => {
+  const el = document.createElement('input');
+  el.type = 'color';
+  el.style.cssText = 'position:fixed;width:0;height:0;opacity:0;pointer-events:none';
+  el.addEventListener('input', (e) => {
+    if (!paletteTargetGame) return;
+    applyGameColor(paletteTargetGame, paletteTargetBtn, e.target.value);
+  });
+  el.addEventListener('change', () => {
+    paletteTargetGame = null;
+    paletteTargetBtn = null;
+  });
+  document.body.appendChild(el);
+  return el;
+})();
+
+function openColorPicker(game, btn) {
+  paletteTargetGame = game;
+  paletteTargetBtn = btn;
+  if (state.opts.fullColorPicker) {
+    nativeColorInput.value = game.color;
+    nativeColorInput.click();
+    return;
+  }
+  const rect = btn.getBoundingClientRect();
+  colorPaletteEl.style.left = (rect.right + 8) + 'px';
+  colorPaletteEl.style.top = rect.top + 'px';
+  colorPaletteEl.classList.remove('hidden');
+}
+
+function applyPaletteColor(hex) {
+  if (!paletteTargetGame) return;
+  applyGameColor(paletteTargetGame, paletteTargetBtn, hex);
+  colorPaletteEl.classList.add('hidden');
+  paletteTargetGame = null;
+  paletteTargetBtn = null;
+}
+
+function applyGameColor(game, btn, hex) {
+  game.color = hex;
+  if (btn) btn.style.background = hex;
+  const cg = state.chartGames.find(g => g.appid === game.appid);
+  if (cg) cg.color = hex;
+  if (state.chartGames.length) drawFrame(1.0, state.chartGames, state.opts, canvas);
+}
+
+document.addEventListener('click', (e) => {
+  if (!colorPaletteEl.classList.contains('hidden')
+      && !colorPaletteEl.contains(e.target)
+      && !e.target.classList.contains('game-color')) {
+    colorPaletteEl.classList.add('hidden');
+    paletteTargetGame = null;
+    paletteTargetBtn = null;
+  }
+});
 
 // --- Duration slider ---
 
@@ -41,6 +135,75 @@ windowSlider.addEventListener('input', () => {
     resetAnimationState(state.chartGames);
     drawFrame(1.0, state.chartGames, state.opts, canvas);
   }
+});
+
+thicknessSlider.addEventListener('input', () => {
+  state.opts.lineThickness = parseInt(thicknessSlider.value, 10);
+  thicknessLabel.textContent = thicknessSlider.value + 'px';
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
+});
+
+document.getElementById('show-images').addEventListener('change', (e) => {
+  state.opts.showImages = e.target.checked;
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
+});
+
+document.getElementById('peak-markers').addEventListener('change', (e) => {
+  state.opts.peakMarkers = e.target.checked;
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
+});
+
+document.getElementById('full-color-picker').addEventListener('change', (e) => {
+  state.opts.fullColorPicker = e.target.checked;
+  colorPaletteEl.classList.add('hidden');
+});
+
+document.getElementById('view-mode-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.seg-btn');
+  if (!btn) return;
+  document.querySelectorAll('#view-mode-toggle .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const mode = btn.dataset.value;
+  canvas.width  = DIMENSIONS[mode].width;
+  canvas.height = DIMENSIONS[mode].height;
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  } else {
+    drawPlaceholder();
+  }
+});
+
+document.getElementById('player-count-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.seg-btn');
+  if (!btn) return;
+  document.querySelectorAll('#player-count-toggle .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.opts.usePeak = btn.dataset.value === 'peak';
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
+});
+
+document.getElementById('end-summary').addEventListener('change', (e) => {
+  state.opts.endSummary = e.target.checked;
+});
+
+const summaryDurationSlider = document.getElementById('summary-duration-slider');
+const summaryDurationLabel = document.getElementById('summary-duration-label');
+summaryDurationSlider.addEventListener('input', () => {
+  state.opts.summaryDuration = parseInt(summaryDurationSlider.value, 10);
+  summaryDurationLabel.textContent = summaryDurationSlider.value + 's';
 });
 
 // --- Search autocomplete ---
@@ -142,12 +305,30 @@ function renderGameList() {
   gameList.innerHTML = '';
   state.games.forEach((game) => {
     const li = document.createElement('li');
-    li.innerHTML = `
-      <span class="game-swatch" style="background:${game.color}"></span>
-      <span class="game-name" title="${game.name}">${game.name}</span>
-      <button class="game-remove" title="Remove">×</button>
-    `;
-    li.querySelector('.game-remove').addEventListener('click', () => removeGame(game.appid));
+
+    const colorInput = document.createElement('button');
+    colorInput.className = 'game-color';
+    colorInput.style.background = game.color;
+    colorInput.title = 'Pick colour';
+    colorInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openColorPicker(game, colorInput);
+    });
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'game-name';
+    nameSpan.title = game.name;
+    nameSpan.textContent = game.name;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'game-remove';
+    removeBtn.title = 'Remove';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => removeGame(game.appid));
+
+    li.appendChild(colorInput);
+    li.appendChild(nameSpan);
+    li.appendChild(removeBtn);
     gameList.appendChild(li);
   });
 }
@@ -169,7 +350,7 @@ async function fetchAndRedraw() {
 
   for (let i = 0; i < state.games.length; i++) {
     const { appid, name, color } = state.games[i];
-    setStatus(`Fetching ${name}… (${i + 1}/${state.games.length})`);
+    setStatus(`Loading ${name}… (${i + 1}/${state.games.length})`);
 
     const result = await window.api.fetchPlayerData(appid);
 
@@ -182,7 +363,7 @@ async function fetchAndRedraw() {
       .map(m => ({ date: parseMonth(m.month), avg: m.avg, peak: m.peak }))
       .filter(p => p.date !== null);
 
-    state.chartGames.push({ name, color, points });
+    state.chartGames.push({ appid, name, color, points });
   }
 
   if (!state.chartGames.length) {
@@ -191,6 +372,12 @@ async function fetchAndRedraw() {
     return;
   }
 
+  // Preload game images via main process to avoid canvas CORS taint
+  setStatus('Loading images…');
+  await Promise.all(state.chartGames.map(async (g) => {
+    g.image = await loadGameImage(g.appid);
+  }));
+
   resetAnimationState(state.chartGames);
   drawFrame(1.0, state.chartGames, state.opts, canvas);
   setStatus(state.chartGames.length === 1
@@ -198,6 +385,34 @@ async function fetchAndRedraw() {
     : `${state.chartGames.length} games loaded`
   );
   updateButtons();
+}
+
+async function loadGameImage(appid) {
+  try {
+    const url = `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/capsule_sm_120.jpg`;
+    console.log('[app] fetching image for appid', appid, url);
+    const dataUrl = await window.api.fetchImage(url);
+    if (!dataUrl) {
+      console.warn('[app] fetchImage returned null for appid', appid);
+      return null;
+    }
+    console.log('[app] got dataUrl for appid', appid, 'length:', dataUrl.length);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        console.log('[app] image loaded for appid', appid, img.naturalWidth, 'x', img.naturalHeight);
+        resolve(img);
+      };
+      img.onerror = (e) => {
+        console.error('[app] image load error for appid', appid, e);
+        resolve(null);
+      };
+      img.src = dataUrl;
+    });
+  } catch (e) {
+    console.warn('[app] loadGameImage failed for appid', appid, e.message);
+    return null;
+  }
 }
 
 function updateButtons() {
@@ -257,7 +472,8 @@ btnExport.addEventListener('click', async () => {
       filePath,
       (pct) => setStatus(`Exporting… ${Math.round(pct * 100)}% (${Math.round(pct * totalFrames)}/${totalFrames} frames)`),
     );
-    setStatus('Export complete: ' + filePath);
+    setStatus('Export complete — ' + filePath);
+    window.api.revealFile(filePath);
   } catch (e) {
     setStatus('Export failed: ' + e.message);
     console.error('[export] failed:', e);

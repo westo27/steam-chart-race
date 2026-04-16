@@ -45,6 +45,11 @@ function makeScale(d0, d1, r0, r1) {
   return (v) => r0 + ((v - d0) / (d1 - d0)) * (r1 - r0);
 }
 
+function smoothstep(t) {
+  t = Math.max(0, Math.min(1, t));
+  return t * t * (3 - 2 * t);
+}
+
 function niceMax(v) {
   if (v <= 0) return 1000;
   const steps = [1, 2, 2.5, 5, 10];
@@ -70,6 +75,25 @@ function formatDateLabel(date) {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
+// Draws text truncated with ellipsis if it exceeds maxWidth
+function fillTextEllipsis(ctx, text, x, y, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+  let t = text;
+  while (t.length > 0 && ctx.measureText(t + '\u2026').width > maxWidth) {
+    t = t.slice(0, -1);
+  }
+  ctx.fillText(t + '\u2026', x, y);
+}
+
+// Returns peak or avg for a data point depending on mode.
+// Falls back to avg if peak is null (older steamcharts data).
+function getVal(p, usePeak) {
+  return (usePeak && p.peak != null) ? p.peak : p.avg;
+}
+
 function colorWithAlpha(hex, alpha) {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -78,7 +102,7 @@ function colorWithAlpha(hex, alpha) {
 }
 
 // Returns drawn points + a smoothly interpolated tip for a game at currentTime.
-function getVisiblePoints(game, currentTime) {
+function getVisiblePoints(game, currentTime, usePeak) {
   const pts = game.points;
 
   let lastIdx = -1;
@@ -95,18 +119,17 @@ function getVisiblePoints(game, currentTime) {
     const p0 = pts[lastIdx];
     const p1 = pts[lastIdx + 1];
     const t = (currentTime - p0.date.getTime()) / (p1.date.getTime() - p0.date.getTime());
+    const v0 = getVal(p0, usePeak);
+    const v1 = getVal(p1, usePeak);
     return {
       drawn,
-      tip: {
-        x: currentTime,
-        avg: Math.round(p0.avg + (p1.avg - p0.avg) * t),
-      },
+      tip: { x: currentTime, val: Math.round(v0 + (v1 - v0) * t) },
     };
   }
 
   return {
     drawn,
-    tip: { x: pts[lastIdx].date.getTime(), avg: pts[lastIdx].avg },
+    tip: { x: pts[lastIdx].date.getTime(), val: getVal(pts[lastIdx], usePeak) },
   };
 }
 
@@ -140,8 +163,8 @@ function drawFrame(progress, games, opts, canvas) {
   //          currentTime at 85% of the frame so there's always lookahead space
   const windowMs = (opts.windowYears || 4) * 365.25 * 24 * 60 * 60 * 1000;
   const scrollThreshold = minDate + windowMs * 0.85;
-  let windowStart, windowEnd;
 
+  let windowStart, windowEnd;
   if (currentTime <= scrollThreshold) {
     windowStart = minDate;
     windowEnd = minDate + windowMs;
@@ -150,17 +173,26 @@ function drawFrame(progress, games, opts, canvas) {
     windowEnd = windowStart + windowMs;
   }
 
+  // Summary transition: smoothly expand the window toward the full date range
+  if (opts.summaryProgress != null) {
+    const t = smoothstep(opts.summaryProgress);
+    windowStart = windowStart + (minDate - windowStart) * t;
+    windowEnd   = windowEnd   + (maxDate - windowEnd)   * t;
+  }
+
   const xScale = makeScale(windowStart, windowEnd, chartL, chartR);
 
+  const usePeak = !!opts.usePeak;
+
   // --- Visible points for each game ---
-  const visibles = games.map(g => getVisiblePoints(g, currentTime));
+  const visibles = games.map(g => getVisiblePoints(g, currentTime, usePeak));
 
   // --- Ease currentMax ---
   let visibleMax = 1000;
   visibles.forEach(v => {
     if (!v) return;
-    v.drawn.forEach(p => { visibleMax = Math.max(visibleMax, p.avg); });
-    if (v.tip) visibleMax = Math.max(visibleMax, v.tip.avg);
+    v.drawn.forEach(p => { visibleMax = Math.max(visibleMax, getVal(p, usePeak)); });
+    if (v.tip) visibleMax = Math.max(visibleMax, v.tip.val);
   });
 
   const targetMax = opts.snapToNice ? niceMax(visibleMax * 1.1) : visibleMax * 1.1;
@@ -178,8 +210,8 @@ function drawFrame(progress, games, opts, canvas) {
     const v = visibles[gi];
     if (!v) return null;
     const ms = v.tip ? v.tip.x : v.drawn[v.drawn.length - 1].date.getTime();
-    const avg = v.tip ? v.tip.avg : v.drawn[v.drawn.length - 1].avg;
-    return { x: xScale(ms), y: yScale(avg), avg };
+    const val = v.tip ? v.tip.val : getVal(v.drawn[v.drawn.length - 1], usePeak);
+    return { x: xScale(ms), y: yScale(val), val };
   });
 
   // --- Grid lines + Y axis labels ---
@@ -207,12 +239,13 @@ function drawFrame(progress, games, opts, canvas) {
   // --- X axis year markers ---
   const startYear = new Date(windowStart).getFullYear();
   const endYear = new Date(windowEnd).getFullYear();
-  // Window is fixed width so pxPerYear is always based on windowYears
-  const pxPerYear = (chartR - chartL) / (opts.windowYears || 4);
+  const windowYears = (windowEnd - windowStart) / (365.25 * 24 * 60 * 60 * 1000);
+  const pxPerYear = (chartR - chartL) / windowYears;
 
   let yearStep = 1;
   if (pxPerYear < 70) yearStep = 2;
   if (pxPerYear < 35) yearStep = 5;
+  if (pxPerYear < 18) yearStep = 10;
 
   ctx.font = '400 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
@@ -249,8 +282,9 @@ function drawFrame(progress, games, opts, canvas) {
     const v = visibles[gi];
     if (!v) return;
 
+    const thickness = opts.lineThickness || 5;
     ctx.strokeStyle = game.color;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = thickness;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.setLineDash([]);
@@ -258,34 +292,119 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.beginPath();
     v.drawn.forEach((p, i) => {
       const x = xScale(p.date.getTime());
-      const y = yScale(p.avg);
+      const y = yScale(getVal(p, usePeak));
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
-    if (v.tip) ctx.lineTo(xScale(v.tip.x), yScale(v.tip.avg));
+    if (v.tip) ctx.lineTo(xScale(v.tip.x), yScale(v.tip.val));
     ctx.stroke();
 
-    // Dot at tip
+    // Dot at tip — radius scales with line thickness
     const tc = tipCoords[gi];
     ctx.beginPath();
-    ctx.arc(tc.x, tc.y, 9, 0, Math.PI * 2);
+    ctx.arc(tc.x, tc.y, thickness * 1.8, 0, Math.PI * 2);
     ctx.fillStyle = game.color;
     ctx.fill();
   });
 
   ctx.restore();
 
+  // --- Peak markers ---
+  if (opts.peakMarkers !== false) {
+    // Collect visible peak info for each game
+    const peaks = [];
+    games.forEach((game, gi) => {
+      const v = visibles[gi];
+      if (!v) return;
+
+      // Find the point with the highest peak value that's been drawn
+      let best = null;
+      for (const p of v.drawn) {
+        if (p.peak !== null && (!best || p.peak > best.peak)) best = p;
+      }
+      if (!best) return;
+
+      const px = xScale(best.date.getTime());
+      if (px < chartL || px > chartR) return; // scrolled off screen
+
+      peaks.push({ game, px, py: yScale(getVal(best, usePeak)), peakVal: best.peak });
+    });
+
+    // Dashed lines + dots (inside chart clip)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartL, chartT, chartR - chartL, chartB - chartT);
+    ctx.clip();
+
+    peaks.forEach(({ game, px, py, peakVal }) => {
+      ctx.strokeStyle = colorWithAlpha(game.color, 0.5);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, chartT);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, Math.PI * 2);
+      ctx.fillStyle = game.color;
+      ctx.fill();
+    });
+
+    ctx.restore();
+
+    // Labels in top margin — stagger vertically to avoid overlap
+    ctx.font = '400 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+
+    const LABEL_STEP = 30;  // px per vertical slot
+    const LABEL_PAD = 12;   // horizontal padding between labels
+
+    // Measure each label and sort left-to-right for greedy placement
+    const peakLabels = peaks.map(p => ({
+      ...p,
+      text: formatY(p.peakVal) + ' peak',
+      halfW: ctx.measureText(formatY(p.peakVal) + ' peak').width / 2,
+      slot: 0,
+    }));
+    peakLabels.sort((a, b) => a.px - b.px);
+
+    // Greedy slot assignment: for each label find the lowest slot where it
+    // doesn't overlap any already-placed label in that slot
+    const placed = [];
+    for (const label of peakLabels) {
+      let slot = 0;
+      let collision = true;
+      while (collision) {
+        collision = placed.some(p =>
+          p.slot === slot &&
+          Math.abs(p.px - label.px) < p.halfW + label.halfW + LABEL_PAD
+        );
+        if (collision) slot++;
+      }
+      label.slot = slot;
+      placed.push(label);
+    }
+
+    peakLabels.forEach(({ game, px, slot, text }) => {
+      ctx.fillStyle = colorWithAlpha(game.color, 0.85);
+      ctx.fillText(text, px, chartT - 8 - slot * LABEL_STEP);
+    });
+  }
+
   // --- Ranked label stack ---
 
   // Build list of games that have data, with their current values
   const activeItems = games
-    .map((game, gi) => ({ game, gi, avg: tipCoords[gi] ? tipCoords[gi].avg : -1 }))
+    .map((game, gi) => ({ game, gi, val: tipCoords[gi] ? tipCoords[gi].val : -1 }))
     .filter(item => tipCoords[item.gi] !== null);
 
   // Sort with hysteresis: group values within 1% of currentMax into the same
   // bucket so near-equal games don't swap rank every frame
   const bucket = Math.max(1, currentMax * 0.01);
-  activeItems.sort((a, b) => Math.round(b.avg / bucket) - Math.round(a.avg / bucket));
+  activeItems.sort((a, b) => Math.round(b.val / bucket) - Math.round(a.val / bucket));
 
   // Ease each game's label toward its target rank position
   activeItems.forEach((item, rank) => {
@@ -316,6 +435,7 @@ function drawFrame(progress, games, opts, canvas) {
   activeItems.forEach(item => {
     const y = item.game.labelY;
     const midY = y + LABEL_H / 2;
+    const hasImage = !!item.game.image && opts.showImages !== false;
 
     // Pill background
     ctx.fillStyle = '#161b22';
@@ -326,22 +446,48 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.fill();
     ctx.stroke();
 
-    // Colour swatch
-    const swatchX = labelX + 14;
+    // Colored left border strip (plain fillRect — no array radii needed)
     ctx.fillStyle = item.game.color;
-    ctx.fillRect(swatchX, midY - 8, 16, 16);
+    ctx.fillRect(labelX, y, 4, LABEL_H);
+
+    let textX;
+
+    if (hasImage) {
+      // Fit the full image (184×69 natural) within a fixed slot, maintaining aspect ratio.
+      // Constrain to pill height minus a little padding so it doesn't touch the edges.
+      const IMG_SLOT_W = 150;
+      const IMG_SLOT_H = LABEL_H - 10;
+      const natW = item.game.image.naturalWidth  || 184;
+      const natH = item.game.image.naturalHeight || 69;
+      const scale = Math.min(IMG_SLOT_W / natW, IMG_SLOT_H / natH);
+      const imgW = natW * scale;
+      const imgH = natH * scale;
+      const imgX = labelX + 8;
+      const imgY = y + (LABEL_H - imgH) / 2;  // centre vertically in pill
+
+      ctx.drawImage(item.game.image, imgX, imgY, imgW, imgH);
+
+      textX = imgX + IMG_SLOT_W + 8;
+    } else {
+      // Fallback: colour swatch
+      ctx.fillStyle = item.game.color;
+      ctx.fillRect(labelX + 14, midY - 8, 16, 16);
+      textX = labelX + 38;
+    }
+
+    const maxTextW = labelX + pillW - textX - 10;
 
     // Game name
     ctx.fillStyle = '#e6edf3';
     ctx.font = '500 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(item.game.name, swatchX + 24, midY - 12);
+    fillTextEllipsis(ctx, item.game.name, textX, midY - 12, maxTextW);
 
     // Current value
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = '400 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(formatY(item.avg), swatchX + 24, midY + 14);
+    ctx.fillText(formatY(item.val), textX, midY + 14);
   });
 
   // --- Current date label centred at bottom ---

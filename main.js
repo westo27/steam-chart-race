@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 
 const steamcharts = require('./main/steamcharts');
@@ -60,6 +60,25 @@ ipcMain.handle('encode-video', async (_event, outPath, opts) => {
   return ffmpegExport.encodeVideo(outPath, opts);
 });
 
+ipcMain.handle('fetch-image', async (_event, url) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn(`[fetch-image] HTTP ${res.status} for ${url}`);
+      return null;
+    }
+    const buffer = await res.arrayBuffer();
+    const b64 = Buffer.from(buffer).toString('base64');
+    const mime = res.headers.get('content-type') || 'image/jpeg';
+    const dataUrl = `data:${mime};base64,${b64}`;
+    console.log(`[fetch-image] OK ${url} (${buffer.byteLength} bytes, ${mime})`);
+    return dataUrl;
+  } catch (e) {
+    console.error('[fetch-image] failed:', url, e.message);
+    return null;
+  }
+});
+
 ipcMain.handle('save-video-dialog', async () => {
   const { filePath, canceled } = await dialog.showSaveDialog({
     title: 'Export Video',
@@ -81,6 +100,10 @@ ipcMain.handle('save-project', async (_event, data) => {
   const fs = require('fs');
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
   return { filePath };
+});
+
+ipcMain.handle('reveal-file', (_event, filePath) => {
+  shell.showItemInFolder(filePath);
 });
 
 ipcMain.handle('load-project', async () => {

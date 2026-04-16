@@ -416,6 +416,11 @@ function drawFrame(progress, games, opts, canvas) {
   const labelX = chartR + 16;
   const pillW = W - labelX - 10;
 
+  // Fade out pills + connectors during summary transition
+  const pillAlpha = opts.summaryProgress != null ? 1 - smoothstep(opts.summaryProgress) : 1;
+  ctx.save();
+  ctx.globalAlpha = pillAlpha;
+
   // Draw connector lines first (they sit behind the pills)
   activeItems.forEach(item => {
     const tc = tipCoords[item.gi];
@@ -432,7 +437,7 @@ function drawFrame(progress, games, opts, canvas) {
   });
 
   // Draw pills
-  activeItems.forEach(item => {
+  if (pillAlpha > 0) activeItems.forEach(item => {
     const y = item.game.labelY;
     const midY = y + LABEL_H / 2;
     const hasImage = !!item.game.image && opts.showImages !== false;
@@ -489,6 +494,7 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.font = '400 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.fillText(formatY(item.val), textX, midY + 14);
   });
+  ctx.restore();
 
   // --- Current date label centred at bottom ---
   ctx.setLineDash([]);
@@ -497,4 +503,73 @@ function drawFrame(progress, games, opts, canvas) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
   ctx.fillText(formatDateLabel(new Date(currentTime)), W / 2, H - 48);
+
+  // --- Summary stats overlay ---
+  if (opts.summaryProgress != null && opts.summaryStats !== false) {
+    const alpha = smoothstep(opts.summaryProgress);
+    if (alpha <= 0) return;
+
+    // Sort games by their final data point value (descending)
+    const ranked = games
+      .filter(g => g.points && g.points.length > 0)
+      .map(g => {
+        const finalVal = getVal(g.points[g.points.length - 1], usePeak);
+        const allTimePeak = g.points.reduce((m, p) => Math.max(m, p.peak ?? 0), 0);
+        return { game: g, finalVal, allTimePeak };
+      })
+      .sort((a, b) => b.finalVal - a.finalVal);
+
+    const ROW_H = 68;
+    const PAD = 28;
+    const panelW = W - MARGIN.left - MARGIN.right;
+    const panelH = PAD + ranked.length * ROW_H + PAD;
+    const panelX = MARGIN.left;
+    const panelY = chartT + 20;
+
+    // Panel background
+    ctx.fillStyle = `rgba(13,17,23,${0.9 * alpha})`;
+    ctx.strokeStyle = `rgba(255,255,255,${0.1 * alpha})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    // Metric label (top right of panel)
+    const metricLabel = usePeak ? 'PEAK PLAYERS' : 'AVG PLAYERS';
+    ctx.fillStyle = `rgba(255,255,255,${0.3 * alpha})`;
+    ctx.font = `500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(metricLabel, panelX + panelW - 20, panelY + 14);
+
+    ranked.forEach(({ game, finalVal, allTimePeak }, rank) => {
+      const rowY = panelY + PAD + rank * ROW_H;
+      const midY = rowY + ROW_H / 2;
+
+      // Rank number
+      ctx.fillStyle = `rgba(255,255,255,${0.35 * alpha})`;
+      ctx.font = `600 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`#${rank + 1}`, panelX + 56, midY);
+
+      // Colour bar
+      ctx.fillStyle = colorWithAlpha(game.color, alpha);
+      ctx.fillRect(panelX + 64, rowY + 10, 4, ROW_H - 20);
+
+      // Game name
+      ctx.fillStyle = `rgba(230,237,243,${alpha})`;
+      ctx.font = `500 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      fillTextEllipsis(ctx, game.name, panelX + 78, midY, panelW * 0.55);
+
+      // Value
+      ctx.fillStyle = colorWithAlpha(game.color, alpha);
+      ctx.font = `600 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.fillText(formatY(finalVal), panelX + panelW - 20, midY);
+    });
+  }
 }

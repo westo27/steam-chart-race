@@ -10,7 +10,9 @@ function startPreview(games, opts, canvas, durationMs) {
   stopPreview();
   resetAnimationState(games);
 
-  const SUMMARY_MS = (opts.summaryDuration || 5) * 1000;
+  const TRANSITION_MS = 1000;
+  const HOLD_MS = (opts.summaryDuration || 5) * 1000;
+  const SUMMARY_MS = TRANSITION_MS + HOLD_MS;
   let startTime = null;
 
   function tick(timestamp) {
@@ -22,8 +24,9 @@ function startPreview(games, opts, canvas, durationMs) {
       drawFrame(elapsed / durationMs, games, opts, canvas);
       animationId = requestAnimationFrame(tick);
     } else if (opts.endSummary && elapsed <= durationMs + SUMMARY_MS) {
-      // Summary phase: smoothly expand window toward full range
-      const summaryProgress = (elapsed - durationMs) / SUMMARY_MS;
+      // Transition (1s) then hold at full range for summaryDuration
+      const summaryElapsed = elapsed - durationMs;
+      const summaryProgress = Math.min(summaryElapsed / TRANSITION_MS, 1);
       drawFrame(1.0, games, { ...opts, summaryProgress }, canvas);
       animationId = requestAnimationFrame(tick);
     } else {

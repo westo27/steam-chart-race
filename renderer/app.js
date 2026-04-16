@@ -18,7 +18,7 @@ const COLOR_CHOICES = [
 const state = {
   games: [],       // { appid, name, color } — sidebar game list
   chartGames: [],  // { name, color, points } — ready for drawFrame
-  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5 },
+  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5, summaryStats: true },
 };
 
 // --- DOM refs ---
@@ -197,6 +197,10 @@ document.getElementById('player-count-toggle').addEventListener('click', (e) => 
 
 document.getElementById('end-summary').addEventListener('change', (e) => {
   state.opts.endSummary = e.target.checked;
+});
+
+document.getElementById('summary-stats').addEventListener('change', (e) => {
+  state.opts.summaryStats = e.target.checked;
 });
 
 const summaryDurationSlider = document.getElementById('summary-duration-slider');

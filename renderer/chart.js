@@ -132,8 +132,25 @@ function drawFrame(progress, games, opts, canvas) {
   const allDates = games.flatMap(g => g.points.map(p => p.date.getTime()));
   const minDate = Math.min(...allDates);
   const maxDate = Math.max(...allDates);
-  const xScale = makeScale(minDate, maxDate, chartL, chartR);
   const currentTime = minDate + progress * (maxDate - minDate);
+
+  // --- Scrolling window ---
+  // Phase 1: window fixed at [minDate, minDate + windowMs]
+  // Phase 2: once currentTime passes 85% of the window, pan right keeping
+  //          currentTime at 85% of the frame so there's always lookahead space
+  const windowMs = (opts.windowYears || 4) * 365.25 * 24 * 60 * 60 * 1000;
+  const scrollThreshold = minDate + windowMs * 0.85;
+  let windowStart, windowEnd;
+
+  if (currentTime <= scrollThreshold) {
+    windowStart = minDate;
+    windowEnd = minDate + windowMs;
+  } else {
+    windowStart = currentTime - windowMs * 0.85;
+    windowEnd = windowStart + windowMs;
+  }
+
+  const xScale = makeScale(windowStart, windowEnd, chartL, chartR);
 
   // --- Visible points for each game ---
   const visibles = games.map(g => getVisiblePoints(g, currentTime));
@@ -188,14 +205,14 @@ function drawFrame(progress, games, opts, canvas) {
   }
 
   // --- X axis year markers ---
-  const startYear = new Date(minDate).getFullYear();
-  const endYear = new Date(maxDate).getFullYear();
-  const pxPerYear = (chartR - chartL) / (endYear - startYear || 1);
+  const startYear = new Date(windowStart).getFullYear();
+  const endYear = new Date(windowEnd).getFullYear();
+  // Window is fixed width so pxPerYear is always based on windowYears
+  const pxPerYear = (chartR - chartL) / (opts.windowYears || 4);
 
   let yearStep = 1;
   if (pxPerYear < 70) yearStep = 2;
   if (pxPerYear < 35) yearStep = 5;
-  if (pxPerYear < 15) yearStep = 10;
 
   ctx.font = '400 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
@@ -203,7 +220,7 @@ function drawFrame(progress, games, opts, canvas) {
 
   for (let year = startYear; year <= endYear; year++) {
     const yearMs = new Date(year, 0, 1).getTime();
-    if (yearMs < minDate || yearMs > maxDate) continue;
+    if (yearMs < windowStart || yearMs > windowEnd) continue;
     const x = xScale(yearMs);
     const showLabel = (year - startYear) % yearStep === 0;
 
@@ -222,7 +239,12 @@ function drawFrame(progress, games, opts, canvas) {
     }
   }
 
-  // --- Game lines ---
+  // --- Game lines (clipped to chart area so history scrolling off left is hidden) ---
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(chartL, chartT, chartR - chartL, chartB - chartT);
+  ctx.clip();
+
   games.forEach((game, gi) => {
     const v = visibles[gi];
     if (!v) return;
@@ -250,6 +272,8 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.fillStyle = game.color;
     ctx.fill();
   });
+
+  ctx.restore();
 
   // --- Ranked label stack ---
 

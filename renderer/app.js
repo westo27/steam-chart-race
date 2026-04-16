@@ -6,7 +6,7 @@ const MAX_GAMES = 5;
 const state = {
   games: [],       // { appid, name, color } — sidebar game list
   chartGames: [],  // { name, color, points } — ready for drawFrame
-  opts: { snapToNice: true, logScale: false },
+  opts: { snapToNice: true, logScale: false, windowYears: 4 },
 };
 
 // --- DOM refs ---
@@ -15,6 +15,8 @@ const autocompleteList = document.getElementById('autocomplete-list');
 const gameList = document.getElementById('game-list');
 const durationSlider = document.getElementById('duration-slider');
 const durationLabel = document.getElementById('duration-label');
+const windowSlider = document.getElementById('window-slider');
+const windowLabel = document.getElementById('window-label');
 const btnPreview = document.getElementById('btn-preview');
 const btnExport = document.getElementById('btn-export');
 const statusBar = document.getElementById('status-bar');
@@ -30,6 +32,15 @@ drawPlaceholder();
 
 durationSlider.addEventListener('input', () => {
   durationLabel.textContent = durationSlider.value + 's';
+});
+
+windowSlider.addEventListener('input', () => {
+  state.opts.windowYears = parseInt(windowSlider.value, 10);
+  windowLabel.textContent = windowSlider.value + 'yr';
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
 });
 
 // --- Search autocomplete ---

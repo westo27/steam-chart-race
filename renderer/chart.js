@@ -4,30 +4,26 @@
 // drawFrame(progress, games, opts, canvas) produces one complete frame.
 // Mutable eased state lives here and must be reset before each animation run.
 
-// Base layout — overridden per-frame based on canvas aspect ratio
-const MARGIN = {
-  top: 160,
-  right: 320,
-  bottom: 160,
-  left: 90,
-};
+// Base layout constants (fallback / for resetAnimationState)
+const MARGIN = { top: 160, right: 40, bottom: 160, left: 40 };
+const LABEL_H = 80;
+const LABEL_GAP = 12;
 
-const LABEL_H = 80;    // pill height in canvas px (desktop)
-const LABEL_GAP = 12;  // gap between pills
-
-// Returns layout constants scaled for the current canvas size.
-// Mobile (portrait, H > W): bigger pills and wider right margin.
+// Returns layout constants for the current canvas size.
+// Chart fills the full width; pills overlay on the right side.
 function getLayout(W, H) {
   const mobile = H > W;
+  const edge = 40; // thin edge padding on both sides
   return {
     margin: {
-      top: mobile ? 200 : 160,
-      right: mobile ? 380 : 320,
+      top:    mobile ? 200 : 160,
+      right:  edge,
       bottom: mobile ? 180 : 160,
-      left: mobile ? 100 : 90,
+      left:   edge,
     },
-    labelH: mobile ? 110 : 80,
-    labelGap: mobile ? 14 : 12,
+    labelH:   mobile ? 110 : 80,
+    labelGap: mobile ? 14  : 12,
+    pillW:    mobile ? 320 : 260,  // pill overlay width
   };
 }
 
@@ -158,7 +154,7 @@ function drawFrame(progress, games, opts, canvas) {
   const W = canvas.width;
   const H = canvas.height;
 
-  const { margin: M, labelH: LH, labelGap: LG } = getLayout(W, H);
+  const { margin: M, labelH: LH, labelGap: LG, pillW: PILL_W } = getLayout(W, H);
 
   const chartL = M.left;
   const chartR = W - M.right;
@@ -503,8 +499,8 @@ function drawFrame(progress, games, opts, canvas) {
     item.game.labelY += (targetY - item.game.labelY) * 0.18;
   });
 
-  const labelX = chartR + 16;
-  const pillW = W - labelX - 10;
+  const pillW = PILL_W;
+  const labelX = W - M.right - pillW - 10;
 
   // Scale font sizes with pill height
   const pillScale = LH / 80;
@@ -539,7 +535,7 @@ function drawFrame(progress, games, opts, canvas) {
     const hasImage = !!item.game.image && opts.showImages !== false;
 
     // Pill background
-    ctx.fillStyle = '#161b22';
+    ctx.fillStyle = 'rgba(13,17,23,0.82)';
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();

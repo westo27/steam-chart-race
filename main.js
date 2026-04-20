@@ -60,6 +60,16 @@ ipcMain.handle('encode-video', async (_event, outPath, opts) => {
   return ffmpegExport.encodeVideo(outPath, opts);
 });
 
+ipcMain.handle('pick-audio-dialog', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog({
+    title: 'Choose Background Music',
+    filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths.length) return { canceled: true };
+  return { filePath: filePaths[0] };
+});
+
 ipcMain.handle('fetch-image', async (_event, url) => {
   try {
     const res = await fetch(url);

@@ -19,27 +19,40 @@ function writeFrame(index, buffer) {
 }
 
 function encodeVideo(outPath, opts) {
-  const { fps = 30 } = opts;
+  const { fps = 30, audioPath = null, totalDuration = null } = opts;
   const inputPattern = path.join(tempDir, 'frame_%04d.png');
 
-  console.log('[ffmpeg-export] encoding', outPath);
+  console.log('[ffmpeg-export] encoding', outPath, audioPath ? `+ audio: ${audioPath}` : '(silent)');
 
   return new Promise((resolve, reject) => {
-    ffmpeg()
+    const cmd = ffmpeg()
       .input(inputPattern)
-      .inputOptions([`-framerate ${fps}`])
-      // Silent audio track — required by TikTok/Instagram, prevents platform flagging
-      .input('anullsrc=r=44100:cl=stereo')
-      .inputOptions(['-f lavfi'])
+      .inputOptions([`-framerate ${fps}`]);
+
+    if (audioPath) {
+      // Real audio: loop it so short tracks cover long videos, then trim to video length
+      cmd
+        .input(audioPath)
+        .inputOptions(['-stream_loop -1']);
+    } else {
+      // Silent fallback — required by TikTok/Instagram
+      cmd
+        .input('anullsrc=r=44100:cl=stereo')
+        .inputOptions(['-f lavfi']);
+    }
+
+    cmd
       .outputOptions([
         '-c:v libx264',
-        '-pix_fmt yuv420p',  // non-negotiable for platform compatibility
-        '-crf 18',           // high quality
-        '-movflags +faststart', // metadata at front for streaming previews
-        '-shortest',         // trim silent audio to video length
+        '-pix_fmt yuv420p',
+        '-crf 18',
+        '-movflags +faststart',
+        '-map 0:v:0',
+        '-map 1:a:0',
+        ...(audioPath && totalDuration ? [`-t ${totalDuration}`] : ['-shortest']),
       ])
       .output(outPath)
-      .on('start', cmd => console.log('[ffmpeg-export] command:', cmd))
+      .on('start', c => console.log('[ffmpeg-export] command:', c))
       .on('progress', p => console.log(`[ffmpeg-export] progress: ${Math.round(p.percent ?? 0)}%`))
       .on('end', () => {
         console.log('[ffmpeg-export] done:', outPath);

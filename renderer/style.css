@@ -362,6 +362,56 @@ input[type="range"] {
   font-size: 12px;
 }
 
+/* --- Audio picker --- */
+
+.audio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-audio {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-audio:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.audio-label {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-audio-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.btn-audio-clear:hover {
+  color: var(--text);
+}
+
+.btn-audio-clear.hidden {
+  display: none;
+}
+
 /* --- Actions --- */
 
 .actions-section {

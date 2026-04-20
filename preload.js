@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('api', {
   saveProject: (data) => ipcRenderer.invoke('save-project', data),
   loadProject: () => ipcRenderer.invoke('load-project'),
   revealFile: (filePath) => ipcRenderer.invoke('reveal-file', filePath),
+  pickAudioDialog: () => ipcRenderer.invoke('pick-audio-dialog'),
 });

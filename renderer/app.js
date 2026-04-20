@@ -34,6 +34,26 @@ const thicknessLabel = document.getElementById('thickness-label');
 const btnPreview = document.getElementById('btn-preview');
 const btnExport = document.getElementById('btn-export');
 const statusBar = document.getElementById('status-bar');
+const btnPickAudio = document.getElementById('btn-pick-audio');
+const btnClearAudio = document.getElementById('btn-clear-audio');
+const audioLabel = document.getElementById('audio-label');
+
+let audioPath = null;
+
+btnPickAudio.addEventListener('click', async () => {
+  const result = await window.api.pickAudioDialog();
+  if (result.canceled) return;
+  audioPath = result.filePath;
+  const name = audioPath.split(/[\\/]/).pop();
+  audioLabel.textContent = name;
+  btnClearAudio.classList.remove('hidden');
+});
+
+btnClearAudio.addEventListener('click', () => {
+  audioPath = null;
+  audioLabel.textContent = 'No music';
+  btnClearAudio.classList.add('hidden');
+});
 const canvas = document.getElementById('chart-canvas');
 
 canvas.width = DIMENSIONS.mobile.width;
@@ -488,6 +508,7 @@ btnExport.addEventListener('click', async () => {
       durationSecs,
       filePath,
       (pct) => setStatus(`Exporting… ${Math.round(pct * 100)}% (${Math.round(pct * totalFrames)}/${totalFrames} frames)`),
+      audioPath,
     );
     setStatus('Export complete — ' + filePath);
     window.api.revealFile(filePath);

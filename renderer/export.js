@@ -3,7 +3,7 @@
 // export.js — frame capture loop
 // Decoupled from real time: iterates frames sequentially, no requestAnimationFrame.
 
-async function exportVideo(games, opts, canvas, durationSecs, outPath, onProgress) {
+async function exportVideo(games, opts, canvas, durationSecs, outPath, onProgress, audioFilePath) {
   const animFrames = durationSecs * 30;
   const TRANSITION_FRAMES = 30; // 1 second at 30fps
   const holdFrames = opts.endSummary ? (opts.summaryDuration || 5) * 30 : 0;
@@ -44,5 +44,6 @@ async function exportVideo(games, opts, canvas, durationSecs, outPath, onProgres
     }
   }
 
-  await window.api.encodeVideo(outPath, { fps: 30 });
+  const totalDuration = totalFrames / 30;
+  await window.api.encodeVideo(outPath, { fps: 30, audioPath: audioFilePath || null, totalDuration });
 }

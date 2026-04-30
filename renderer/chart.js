@@ -16,10 +16,10 @@ function getLayout(W, H) {
   const edge = 40; // thin edge padding on both sides
   return {
     margin: {
-      top:    mobile ? 200 : 160,
+      top:    mobile ? 460 : 160,
       right:  edge,
-      bottom: mobile ? 180 : 160,
-      left:   edge,
+      bottom: mobile ? 320 : 160,
+      left:   mobile ? 160 : 90,
     },
     labelH:   mobile ? 110 : 80,
     labelGap: mobile ? 14  : 12,
@@ -165,8 +165,9 @@ function drawFrame(progress, games, opts, canvas) {
   ctx.fillStyle = '#0d1117';
   ctx.fillRect(0, 0, W, H);
 
-  // --- Game title (name vs name vs name…) ---
-  if (opts.showTitle !== false && games.length > 0) {
+  // --- Game title — drawn after peak markers so we know how much space they need ---
+  function drawTitle(peakAreaH) {
+    if (opts.showTitle === false || games.length === 0) return;
     const SEP = ' vs ';
     const FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     const names = games.map(g => g.name);
@@ -185,7 +186,6 @@ function drawFrame(progress, games, opts, canvas) {
       return sz;
     }
 
-    // Try single line first; if it still overflows at min size, split into 2 lines
     let fontSize = shrinkToFit(names.join(SEP), 48, 24);
     ctx.font = `600 ${fontSize}px ${FONT}`;
     const fitsOnOne = names.length === 1 || ctx.measureText(names.join(SEP)).width <= maxW;
@@ -194,7 +194,6 @@ function drawFrame(progress, games, opts, canvas) {
     if (fitsOnOne) {
       lineGroups = [names];
     } else {
-      // Split at midpoint — try all splits and pick the one that needs the smallest maxW
       let bestSplit = Math.ceil(names.length / 2);
       let bestWorstW = Infinity;
       for (let s = 1; s < names.length; s++) {
@@ -204,7 +203,6 @@ function drawFrame(progress, games, opts, canvas) {
         if (worst < bestWorstW) { bestWorstW = worst; bestSplit = s; }
       }
       lineGroups = [names.slice(0, bestSplit), names.slice(bestSplit)];
-      // Recompute font size so the widest line fits
       const widest = lineGroups.map(g => g.join(SEP)).sort((a, b) =>
         ctx.measureText(b).width - ctx.measureText(a).width)[0];
       fontSize = shrinkToFit(widest, 44, 20);
@@ -212,7 +210,8 @@ function drawFrame(progress, games, opts, canvas) {
 
     const lineH = fontSize * 1.4;
     const totalH = lineGroups.length * lineH;
-    const startY = M.top / 2 - totalH / 2 + lineH / 2;
+    // Sit title above peak label area with a small gap
+    const startY = chartT - peakAreaH - totalH - 12 + lineH / 2;
 
     ctx.font = `600 ${fontSize}px ${FONT}`;
     ctx.textBaseline = 'middle';
@@ -223,7 +222,6 @@ function drawFrame(progress, games, opts, canvas) {
       const lineW = ctx.measureText(lineText).width;
       let x = chartMidX - lineW / 2;
       const y = startY + li * lineH;
-
       lineNames.forEach((name, i) => {
         ctx.fillStyle = '#e6edf3';
         ctx.fillText(name, x, y);
@@ -244,26 +242,33 @@ function drawFrame(progress, games, opts, canvas) {
   const currentTime = minDate + progress * (maxDate - minDate);
 
   // --- Scrolling window ---
-  // Phase 1: window fixed at [minDate, minDate + windowMs]
-  // Phase 2: once currentTime passes 85% of the window, pan right keeping
-  //          currentTime at 85% of the frame so there's always lookahead space
-  const windowMs = (opts.windowYears || 4) * 365.25 * 24 * 60 * 60 * 1000;
-  const scrollThreshold = minDate + windowMs * 0.85;
-
   let windowStart, windowEnd;
-  if (currentTime <= scrollThreshold) {
-    windowStart = minDate;
-    windowEnd = minDate + windowMs;
-  } else {
-    windowStart = currentTime - windowMs * 0.85;
-    windowEnd = windowStart + windowMs;
-  }
 
-  // Summary transition: smoothly expand the window toward the full date range
-  if (opts.summaryProgress != null) {
-    const t = smoothstep(opts.summaryProgress);
-    windowStart = windowStart + (minDate - windowStart) * t;
-    windowEnd   = windowEnd   + (maxDate - windowEnd)   * t;
+  if (opts.fullRange) {
+    // X-axis spans minDate → currentTime, with a small buffer so the tip dot isn't clipped
+    windowStart = minDate;
+    const buffer = Math.max((currentTime - minDate) * 0.03, 30 * 24 * 60 * 60 * 1000);
+    windowEnd   = currentTime + buffer;
+  } else {
+    // Phase 1: window fixed at [minDate, minDate + windowMs]
+    // Phase 2: once currentTime passes 85% of the window, pan right
+    const windowMs = (opts.windowYears || 4) * 365.25 * 24 * 60 * 60 * 1000;
+    const scrollThreshold = minDate + windowMs * 0.85;
+
+    if (currentTime <= scrollThreshold) {
+      windowStart = minDate;
+      windowEnd = minDate + windowMs;
+    } else {
+      windowStart = currentTime - windowMs * 0.85;
+      windowEnd = windowStart + windowMs;
+    }
+
+    // Summary transition: smoothly expand the window toward the full date range
+    if (opts.summaryProgress != null) {
+      const t = smoothstep(opts.summaryProgress);
+      windowStart = windowStart + (minDate - windowStart) * t;
+      windowEnd   = windowEnd   + (maxDate - windowEnd)   * t;
+    }
   }
 
   const xScale = makeScale(windowStart, windowEnd, chartL, chartR);
@@ -302,8 +307,12 @@ function drawFrame(progress, games, opts, canvas) {
 
   // --- Grid lines + Y axis labels ---
   const GRID_STEPS = 5;
+  const mobile = H > W;
+  const yAxisFontSize = mobile ? 38 : 30;
+  const xAxisFontSize = mobile ? 34 : 26;
+
   ctx.setLineDash([]);
-  ctx.font = '400 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.font = `400 ${yAxisFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
 
@@ -318,8 +327,8 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.lineTo(chartR, y);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.fillText(formatY(val), chartL - 14, y);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(formatY(val), chartL - 8, y);
   }
 
   // --- X axis year markers ---
@@ -328,12 +337,13 @@ function drawFrame(progress, games, opts, canvas) {
   const windowYears = (windowEnd - windowStart) / (365.25 * 24 * 60 * 60 * 1000);
   const pxPerYear = (chartR - chartL) / windowYears;
 
+  const minPxPerLabel = xAxisFontSize * 2.8; // rough label width based on font size
   let yearStep = 1;
-  if (pxPerYear < 70) yearStep = 2;
-  if (pxPerYear < 35) yearStep = 5;
-  if (pxPerYear < 18) yearStep = 10;
+  if (pxPerYear < minPxPerLabel)       yearStep = 2;
+  if (pxPerYear < minPxPerLabel / 2)   yearStep = 5;
+  if (pxPerYear < minPxPerLabel / 4)   yearStep = 10;
 
-  ctx.font = '400 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  ctx.font = `400 ${xAxisFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
 
@@ -353,7 +363,7 @@ function drawFrame(progress, games, opts, canvas) {
     ctx.setLineDash([]);
 
     if (showLabel) {
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fillText(String(year), x, chartB + 18);
     }
   }
@@ -397,6 +407,7 @@ function drawFrame(progress, games, opts, canvas) {
 
   // --- Peak markers ---
   if (opts.peakMarkers !== false && opts.summaryProgress == null) {
+    // drawTitle() called at end of this block with correct peakAreaH
     // Collect visible peak info for each game
     const peaks = [];
     games.forEach((game, gi) => {
@@ -474,10 +485,17 @@ function drawFrame(progress, games, opts, canvas) {
       placed.push(label);
     }
 
+    const maxSlot = peakLabels.reduce((m, l) => Math.max(m, l.slot), 0);
+    const peakAreaH = peakLabels.length ? (maxSlot + 1) * LABEL_STEP + 8 : 0;
+
     peakLabels.forEach(({ game, px, slot, text }) => {
       ctx.fillStyle = colorWithAlpha(game.color, 0.85);
       ctx.fillText(text, px, chartT - 8 - slot * LABEL_STEP);
     });
+
+    drawTitle(peakAreaH);
+  } else {
+    drawTitle(0);
   }
 
   // --- Ranked label stack ---
@@ -593,7 +611,7 @@ function drawFrame(progress, games, opts, canvas) {
   ctx.font = '400 32px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.fillText(formatDateLabel(new Date(currentTime)), W / 2, H - 48);
+  ctx.fillText(formatDateLabel(new Date(currentTime)), W / 2, chartB + (H - M.bottom - chartB) / 2 + 10);
 
   // --- Summary stats overlay ---
   if (opts.summaryProgress != null && opts.summaryStats !== false) {
@@ -610,8 +628,14 @@ function drawFrame(progress, games, opts, canvas) {
       })
       .sort((a, b) => b.allTimePeak - a.allTimePeak);
 
-    const ROW_H = 68;
-    const PAD = 28;
+    const ROW_H = mobile ? 100 : 68;
+    const PAD = mobile ? 36 : 28;
+    const rankFontSize = mobile ? 36 : 26;
+    const nameFontSizeS = mobile ? 38 : 28;
+    const valFontSizeS = mobile ? 40 : 30;
+    const metricFontSize = mobile ? 28 : 20;
+    const rankColW = mobile ? 76 : 56;
+
     const panelW = W - M.left - M.right;
     const panelH = PAD + ranked.length * ROW_H + PAD;
     const panelX = M.left;
@@ -629,7 +653,7 @@ function drawFrame(progress, games, opts, canvas) {
     // Metric label (top right of panel)
     const metricLabel = 'ALL-TIME PEAK';
     ctx.fillStyle = `rgba(255,255,255,${0.3 * alpha})`;
-    ctx.font = `500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.font = `500 ${metricFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     ctx.fillText(metricLabel, panelX + panelW - 20, panelY + 14);
@@ -640,45 +664,46 @@ function drawFrame(progress, games, opts, canvas) {
 
       // Rank number
       ctx.fillStyle = `rgba(255,255,255,${0.35 * alpha})`;
-      ctx.font = `600 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.font = `600 ${rankFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`#${rank + 1}`, panelX + 56, midY);
+      ctx.fillText(`#${rank + 1}`, panelX + rankColW, midY);
 
       // Colour bar
+      const barX = panelX + rankColW + 8;
       ctx.fillStyle = colorWithAlpha(game.color, alpha);
-      ctx.fillRect(panelX + 64, rowY + 10, 4, ROW_H - 20);
+      ctx.fillRect(barX, rowY + 10, 4, ROW_H - 20);
 
       const hasImage = !!game.image && opts.showImages !== false;
-      let nameX = panelX + 78;
+      const contentX = barX + 12;
+      let nameX = contentX;
 
       if (hasImage) {
-        // Fit capsule image into row height slot
-        const IMG_SLOT_W = 120;
+        const IMG_SLOT_W = mobile ? 160 : 120;
         const IMG_SLOT_H = ROW_H - 16;
         const natW = game.image.naturalWidth  || 184;
         const natH = game.image.naturalHeight || 69;
         const scale = Math.min(IMG_SLOT_W / natW, IMG_SLOT_H / natH);
         const imgW = natW * scale;
         const imgH = natH * scale;
-        const imgX = panelX + 78;
         const imgY = rowY + (ROW_H - imgH) / 2;
         ctx.globalAlpha = alpha;
-        ctx.drawImage(game.image, imgX, imgY, imgW, imgH);
+        ctx.drawImage(game.image, contentX, imgY, imgW, imgH);
         ctx.globalAlpha = 1;
-        nameX = imgX + IMG_SLOT_W + 10;
+        nameX = contentX + IMG_SLOT_W + 10;
       }
 
       // Game name
       ctx.fillStyle = `rgba(230,237,243,${alpha})`;
-      ctx.font = `500 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.font = `500 ${nameFontSizeS}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      fillTextEllipsis(ctx, game.name, nameX, midY, panelX + panelW - 120 - nameX);
+      const valColW = mobile ? 160 : 120;
+      fillTextEllipsis(ctx, game.name, nameX, midY, panelX + panelW - valColW - nameX);
 
       // Value (all-time peak)
       ctx.fillStyle = colorWithAlpha(game.color, alpha);
-      ctx.font = `600 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.font = `600 ${valFontSizeS}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       ctx.textAlign = 'right';
       ctx.fillText(formatY(allTimePeak), panelX + panelW - 20, midY);
     });

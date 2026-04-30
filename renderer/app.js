@@ -18,7 +18,7 @@ const COLOR_CHOICES = [
 const state = {
   games: [],       // { appid, name, color } — sidebar game list
   chartGames: [],  // { name, color, points } — ready for drawFrame
-  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5, summaryStats: true, showTitle: false },
+  opts: { usePeak: true, snapToNice: true, logScale: false, windowYears: 4, lineThickness: 5, showImages: true, peakMarkers: true, fullColorPicker: false, endSummary: true, summaryDuration: 5, summaryStats: true, showTitle: false, fullRange: true },
 };
 
 // --- DOM refs ---
@@ -171,6 +171,14 @@ thicknessSlider.addEventListener('input', () => {
   }
 });
 
+document.getElementById('zoom-to-fit').addEventListener('change', (e) => {
+  state.opts.fullRange = e.target.checked;
+  if (state.chartGames.length) {
+    resetAnimationState(state.chartGames, canvas);
+    drawFrame(1.0, state.chartGames, state.opts, canvas);
+  }
+});
+
 document.getElementById('show-images').addEventListener('change', (e) => {
   state.opts.showImages = e.target.checked;
   if (state.chartGames.length) {
@@ -208,6 +216,9 @@ document.getElementById('view-mode-toggle').addEventListener('click', (e) => {
   const mode = btn.dataset.value;
   canvas.width  = DIMENSIONS[mode].width;
   canvas.height = DIMENSIONS[mode].height;
+  state.opts.fullRange = mode === 'mobile';
+  const zoomCb = document.getElementById('zoom-to-fit');
+  zoomCb.checked = state.opts.fullRange;
   if (state.chartGames.length) {
     resetAnimationState(state.chartGames, canvas);
     drawFrame(1.0, state.chartGames, state.opts, canvas);

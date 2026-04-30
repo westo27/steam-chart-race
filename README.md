@@ -22,8 +22,6 @@ A desktop tool that generates animated line chart videos comparing Steam game pl
 | Video export | ffmpeg-static + fluent-ffmpeg |
 | Packaging | electron-builder |
 
-No React, no TypeScript, no bundler.
-
 ## Project layout
 
 ```

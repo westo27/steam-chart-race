@@ -1,3 +1,7 @@
+// Steam Chart Race — animated player count videos
+// Copyright (C) 2026 Tom Weston
+// Licensed under GPL v3. See LICENSE for details.
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {

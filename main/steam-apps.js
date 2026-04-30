@@ -1,3 +1,7 @@
+// Steam Chart Race — animated player count videos
+// Copyright (C) 2026 Tom Weston
+// Licensed under GPL v3. See LICENSE for details.
+
 // Steam game search via Steam's store search API.
 // Replaces the original GetAppList approach — that endpoint was removed by Valve.
 // Live search means results are always current and no local DB is needed.

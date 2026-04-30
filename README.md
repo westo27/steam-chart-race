@@ -1,13 +1,12 @@
 # Steam Chart Race
 
-
+<br>
 
 <img width="1279" height="870" alt="Screenshot 2026-04-30 at 17 19 45" src="https://github.com/user-attachments/assets/7b9e2df4-7cbd-438f-9f80-26b66400224c" />
 
-
+<br>
 
 A desktop tool that generates animated line chart videos comparing Steam game player counts over time. Output is a 9:16 MP4 sized for TikTok, Instagram Reels, and YouTube Shorts.
-
 ## How it works
 
 1. Type two to five Steam game names; an autocomplete picks the app ID from a local cache.
